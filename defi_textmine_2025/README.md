@@ -10,12 +10,41 @@
 
 ## Setup
 
+### VS Code settings
+````json
+{
+    "workbench.colorTheme": "Default Dark Modern",
+    "extensions.autoCheckUpdates": false,
+    "extensions.autoUpdate": false,
+    "update.enableWindowsBackgroundUpdates": false,
+    "update.showReleaseNotes": false,
+    "update.mode": "none",
+    "telemetry.telemetryLevel": "off",
+    "settingsSync.keybindingsPerPlatform": false,
+    "jupyter.notebookFileRoot": "${workspaceFolder}",
+    "python.terminal.launchArgs": [
+        "-m",
+        "IPython",
+        "--no-autoindent"
+    ],
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "remote.autoForwardPortsSource": "hybrid",
+    "jupyter.askForKernelRestart": false,
+    "flake8.args": [
+        "--max-line-length=88"
+    ],
+    "git.suggestSmartCommit": false,
+    "notebook.lineNumbers": "on",
+}
+````
+
 ### Create and activate a python (>=3.10,<3.12) environment
 
 * Use anything you want: pyenv, conda, venv, ...
 * install the dependencies: `pip install -r requirements.txt`
 
-### kaggle API
+### Use kaggle API to get the data and submit your solution
 
 #### Install and configure the kaggle API client package
 
@@ -39,6 +68,11 @@ kaggle competitions download -c ${challenge} -p data
 unzip data/${challenge}.zip -d data/${challenge}/raw
 rm data/${challenge}.zip
 ````
+
+#### Submission
+```shell
+kaggle competitions submit -c defi-text-mine-2025 -f data/defi-text-mine-2025/output/submission.csv -m "Message"
+```
 
 ### _Weights & Bias_ to track experiment
 
