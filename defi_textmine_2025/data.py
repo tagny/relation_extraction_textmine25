@@ -143,7 +143,6 @@ class TextToMultiLabelDataGenerator:
               second entities in the marked text, and a last column with the marked text
         """
         logging.debug("starting")
-        assert x["id"] != y["id"]
         start2mentions = {
             m["start"]: m | {"id": e["id"], "type": e["type"]}
             for e in [x, y]
@@ -153,6 +152,7 @@ class TextToMultiLabelDataGenerator:
         last_possible_end = len(text)
         entities_ids = (x["id"], y["id"])
         first_entity_id_to_tagged_text = {_id: "" for _id in entities_ids}
+
         for entity_start in sorted(list(start2mentions.keys())):
             if next_start >= len(text):
                 break
@@ -173,6 +173,8 @@ class TextToMultiLabelDataGenerator:
                 first_entity_id_to_tagged_text[
                     first_entity_id
                 ] += "<{}><{}>{}</{}>".format(tag, entity_type, entity_span, tag)
+                if first_entity_id == entity_id:
+                    break
             next_start = entity_end
         # add the remaining text span if any remains
         if next_start < last_possible_end:
@@ -180,11 +182,11 @@ class TextToMultiLabelDataGenerator:
             for first_entity_id in entities_ids:
                 first_entity_id_to_tagged_text[first_entity_id] += not_entity_span
         logging.debug("ending")
+        rows = [[x["id"], y["id"], first_entity_id_to_tagged_text[x["id"]]]]
+        if x["id"] != y["id"]:
+            rows.append([y["id"], x["id"], first_entity_id_to_tagged_text[y["id"]]])
         return pd.DataFrame(
-            [
-                [x["id"], y["id"], first_entity_id_to_tagged_text[x["id"]]],
-                [y["id"], x["id"], first_entity_id_to_tagged_text[y["id"]]],
-            ],
+            rows,
             columns=[
                 self.first_entity_tag_name,
                 self.second_entity_tag_name,
@@ -193,7 +195,7 @@ class TextToMultiLabelDataGenerator:
         )
 
     def convert_relations_to_dataframe(
-        self, relations: List[Tuple[int, str, int]]
+        self, text_index, relations: List[Tuple[int, str, int]]
     ) -> pd.DataFrame:
         """convert all the relations labeled in a text into a dataframe
 
@@ -214,10 +216,7 @@ class TextToMultiLabelDataGenerator:
         if not relations:
             return pd.DataFrame(columns=columns)
         entity_pair_to_relations = {}
-        for text_relation in relations:
-            e1 = text_relation[0]
-            r = text_relation[1]
-            e2 = text_relation[2]
+        for e1, r, e2 in relations:
             entity_pair = (e1, e2)
             if entity_pair not in entity_pair_to_relations:
                 entity_pair_to_relations[entity_pair] = set()
@@ -225,7 +224,7 @@ class TextToMultiLabelDataGenerator:
         logging.debug("ending")
         return pd.DataFrame(
             [
-                [e1, e2, e1_e2_relations]
+                [e1, e2, list(e1_e2_relations)]
                 for (e1, e2), e1_e2_relations in entity_pair_to_relations.items()
             ],
             columns=columns,
@@ -263,11 +262,21 @@ class TextToMultiLabelDataGenerator:
         """
         logging.debug("starting")
         entity_pair_to_relations_df = self.convert_relations_to_dataframe(
-            text_relations
+            text_index, text_relations
         )
         entity_pair_to_text_df = pd.DataFrame()
+        # for idx in range(entity_pair_to_relations_df.shape[0]):
+        #     row_idx_entity_pair_to_text_df = self.tag_entities(
+        #         text,
+        #         entity_pair_to_relations_df.e1.loc[idx],
+        #         entity_pair_to_relations_df.e2.loc[idx],
+        #     )
+        #     logging.info(row_idx_entity_pair_to_text_df)
+        #     entity_pair_to_text_df = pd.concat(
+        #         [entity_pair_to_text_df, row_idx_entity_pair_to_text_df], axis=0
+        #     )
         for i in range(len(text_entities)):
-            for j in range(i):
+            for j in range(len(text_entities)):
                 ij_entity_pair_to_text_df = self.tag_entities(
                     text, text_entities[i], text_entities[j]
                 )
@@ -281,9 +290,13 @@ class TextToMultiLabelDataGenerator:
         ).reset_index(drop=True)[new_columns]
 
         logging.debug("ending")
+        # logging.info(row_idx_entity_pair_to_text_df)
         return entity_pair_to_text_df.join(
             entity_pair_to_relations_df.set_index(
-                [self.first_entity_tag_name, self.second_entity_tag_name]
+                [
+                    self.first_entity_tag_name,
+                    self.second_entity_tag_name,
+                ]
             ),
             on=[
                 self.first_entity_tag_name,
