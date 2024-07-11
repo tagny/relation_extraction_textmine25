@@ -195,7 +195,7 @@ class TextToMultiLabelDataGenerator:
         )
 
     def convert_relations_to_dataframe(
-        self, text_index, relations: List[Tuple[int, str, int]]
+        self, relations: List[Tuple[int, str, int]]
     ) -> pd.DataFrame:
         """convert all the relations labeled in a text into a dataframe
 
@@ -230,6 +230,43 @@ class TextToMultiLabelDataGenerator:
             columns=columns,
         )
 
+    def tag_all_possible_entity_pairs(
+        self,
+        text_index: int,
+        text: str,
+        text_entities: List[Dict[str, Any]],
+    ) -> pd.DataFrame:
+        """apply self.tag_entities() for each entity pair in text_entities
+
+        Args:
+            text_index (int): the text index in the original dataset
+            text (str): the text as stated in the original dataset
+            text_entities (List[Dict[str, Any]]): the entity mentioned in the text
+              as given in the original dataset
+
+        Returns:
+            pd.DataFrame: the resulting dataset
+        """
+        logging.debug("starting")
+        entity_pair_to_text_df = pd.DataFrame()
+        for i in range(len(text_entities)):
+            # for j in range(len(text_entities)):
+            for j in range(i + 1):
+                ij_entity_pair_to_text_df = self.tag_entities(
+                    text, text_entities[i], text_entities[j]
+                )
+                entity_pair_to_text_df = pd.concat(
+                    [entity_pair_to_text_df, ij_entity_pair_to_text_df], axis=0
+                )
+        new_columns = [self.text_index_col] + entity_pair_to_text_df.columns.to_list()
+        # logging.info(f"{new_columns=}")
+        entity_pair_to_text_df = entity_pair_to_text_df.assign(
+            **{self.text_index_col: text_index}
+        ).reset_index(drop=True)[new_columns]
+
+        logging.debug("ending")
+        return entity_pair_to_text_df
+
     def convert(
         self,
         text_index: int,
@@ -261,36 +298,13 @@ class TextToMultiLabelDataGenerator:
             pd.DataFrame: the resulting dataset
         """
         logging.debug("starting")
-        entity_pair_to_relations_df = self.convert_relations_to_dataframe(
-            text_index, text_relations
+        entity_pair_to_text_df = self.tag_all_possible_entity_pairs(
+            text_index, text, text_entities
         )
-        entity_pair_to_text_df = pd.DataFrame()
-        # for idx in range(entity_pair_to_relations_df.shape[0]):
-        #     row_idx_entity_pair_to_text_df = self.tag_entities(
-        #         text,
-        #         entity_pair_to_relations_df.e1.loc[idx],
-        #         entity_pair_to_relations_df.e2.loc[idx],
-        #     )
-        #     logging.info(row_idx_entity_pair_to_text_df)
-        #     entity_pair_to_text_df = pd.concat(
-        #         [entity_pair_to_text_df, row_idx_entity_pair_to_text_df], axis=0
-        #     )
-        for i in range(len(text_entities)):
-            for j in range(len(text_entities)):
-                ij_entity_pair_to_text_df = self.tag_entities(
-                    text, text_entities[i], text_entities[j]
-                )
-                entity_pair_to_text_df = pd.concat(
-                    [entity_pair_to_text_df, ij_entity_pair_to_text_df], axis=0
-                )
-        new_columns = [self.text_index_col] + entity_pair_to_text_df.columns.to_list()
-        # logging.info(f"{new_columns=}")
-        entity_pair_to_text_df = entity_pair_to_text_df.assign(
-            **{self.text_index_col: text_index}
-        ).reset_index(drop=True)[new_columns]
-
+        entity_pair_to_relations_df = self.convert_relations_to_dataframe(
+            text_relations
+        )
         logging.debug("ending")
-        # logging.info(row_idx_entity_pair_to_text_df)
         return entity_pair_to_text_df.join(
             entity_pair_to_relations_df.set_index(
                 [
